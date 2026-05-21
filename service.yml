@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${APP_NAME}-service
+  labels:
+    app: ${APP_NAME}
+spec:
+  type: ClusterIP
+  selector:
+    app: ${APP_NAME}
+  ports:
+    - protocol: TCP
+      # Cluster-internal callers (notes service's NoteIndexerConsumer,
+      # which POSTs to /embed on save and DELETEs /embed/{id} on delete)
+      # reach this on port 8001 — matches AI_CORE_BASE_URL in the notes
+      # deployment env.
+      port: 8001
+      targetPort: 8001

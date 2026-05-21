@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${APP_NAME}-deployment
+  labels:
+    app: ${APP_NAME}
+spec:
+  replicas: ${REPLICAS}
+  selector:
+    matchLabels:
+      app: ${APP_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${APP_NAME}
+    spec:
+      containers:
+        - name: ${APP_NAME}
+          image: ${IMAGE_REPO}:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+          env:
+            # pydantic-settings reads these from the environment (case-
+            # insensitive). The Settings model in app/config.py expects
+            # POSTGRES_* + provider keys + JWT_SECRET. Hardcoded defaults
+            # in .env are for local dev only — these env vars take over
+            # in-cluster.
+            - name: APP_HOST
+              value: "0.0.0.0"
+            - name: APP_PORT
+              value: "8001"
+
+            # Postgres (with pgvector) — shared instance on the LXD host,
+            # reached via the bridge IP. Same DB as the notes service uses
+            # for note storage; this service writes into its own
+            # POSTGRES_SCHEMA so the two don't clash.
+            - name: POSTGRES_HOST
+              value: ${POSTGRES_HOST}
+            - name: POSTGRES_PORT
+              value: ${POSTGRES_PORT}
+            - name: POSTGRES_DB
+              value: ${POSTGRES_DB}
+            - name: POSTGRES_USER
+              value: ${POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              value: ${POSTGRES_PASSWORD}
+            - name: POSTGRES_SCHEMA
+              value: ${POSTGRES_SCHEMA}
+
+            # Provider selection — embeddings default to gemini (cheaper,
+            # 768-dim matches the pgvector column), chat defaults to openai
+            # (better quality for RAG answers). OPENAI_API_KEY only needs
+            # to be set if either provider is "openai".
+            - name: CHAT_PROVIDER
+              value: ${CHAT_PROVIDER}
+            - name: EMBED_PROVIDER
+              value: ${EMBED_PROVIDER}
+            - name: GEMINI_API_KEY
+              value: ${GEMINI_API_KEY}
+            - name: OPENAI_API_KEY
+              value: ${OPENAI_API_KEY}
+
+            # JWT signing — MUST match the value used by Authentication so
+            # bearer tokens from the frontend validate here. Same value
+            # must also be set on roles + notes.
+            - name: JWT_SECRET
+              value: ${JWT_SECRET}
+
+            - name: CORS_ALLOWED_ORIGINS
+              value: ${CORS_ALLOWED_ORIGINS}
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 40
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            # Embedding/RAG calls keep a few hundred MB of model state +
+            # async pgvector connections in flight — headroom matters.
+            requests:
+              cpu: "150m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"

@@ -1,0 +1,40 @@
+# Traefik Middleware strips the /ai-core prefix so the FastAPI app, whose
+# routers are mounted at the root (/embed, /search, /chat, /rag, /tags,
+# /recommendations), can stay path-agnostic. Same pattern the digital-
+# banking stack uses for its FastAPI services.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ${APP_NAME}-stripprefix
+spec:
+  stripPrefix:
+    prefixes:
+      - /ai-core
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ${APP_NAME}-ingress
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    # ${KUBE_NAMESPACE}-${APP_NAME}-stripprefix@kubernetescrd is how
+    # Traefik references namespaced Middleware CRs from a vanilla
+    # Ingress object.
+    traefik.ingress.kubernetes.io/router.middlewares: ${KUBE_NAMESPACE}-${APP_NAME}-stripprefix@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ${INGRESS_HOST}
+      http:
+        paths:
+          # /ai-core/* beats the UI's "/" by most-specific match, so
+          # /ai-core/embed, /ai-core/search, /ai-core/chat etc. all land
+          # here. The StripPrefix middleware turns those into /embed,
+          # /search, /chat before forwarding to the pod.
+          - path: /ai-core
+            pathType: Prefix
+            backend:
+              service:
+                name: ${APP_NAME}-service
+                port:
+                  number: 8001

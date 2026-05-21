@@ -1,0 +1,11 @@
+fastapi==0.118.0
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.0
+google-genai==1.45.0
+openai==1.59.7
+SQLAlchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+pgvector==0.3.6
+python-multipart==0.0.20
+python-jose[cryptography]==3.3.0
